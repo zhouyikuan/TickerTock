@@ -24,6 +24,8 @@ fun SearchScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
+
+
     val allStocks = remember {
         listOf(
             Stock("NVDA", "NVIDIA Corporation", 875.43, 25.67, 3.02),
@@ -145,14 +147,6 @@ fun SearchResultCard(
                 Text(
                     text = stock.name,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "$${String.format("%.2f", stock.currentPrice)}",
-                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

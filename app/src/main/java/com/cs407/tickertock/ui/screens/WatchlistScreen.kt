@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.TrendingDown
@@ -27,32 +28,16 @@ import com.cs407.tickertock.data.Stock
 @Composable
 fun WatchlistScreen(
     watchlistStocks: List<String>,
+    stockDataMap: Map<String, Stock>,
+    isRefreshing: Boolean,
     onStockClick: (String) -> Unit,
     onSearchClick: () -> Unit,
+    onRefresh: () -> Unit,
     onStockRemove: (String) -> Unit
 ) {
-    // Full stock data for all available stocks
-    val allStockData = remember {
-        mapOf(
-            "NVDA" to Stock("NVDA", "NVIDIA Corporation", 875.43, 25.67, 3.02),
-            "TSM" to Stock("TSM", "Taiwan Semiconductor", 145.22, -2.45, -1.66),
-            "QQQ" to Stock("QQQ", "Invesco QQQ Trust", 425.18, -5.12, -1.19),
-            "AAPL" to Stock("AAPL", "Apple Inc.", 189.95, 3.44, 1.84),
-            "MSFT" to Stock("MSFT", "Microsoft Corporation", 415.26, 8.12, 2.00),
-            "GOOGL" to Stock("GOOGL", "Alphabet Inc.", 2847.15, -15.23, -0.53),
-            "AMZN" to Stock("AMZN", "Amazon.com Inc.", 3467.42, 22.18, 0.64),
-            "META" to Stock("META", "Meta Platforms Inc.", 485.12, -7.33, -1.49),
-            "TSLA" to Stock("TSLA", "Tesla Inc.", 248.87, 12.45, 5.26),
-            "NFLX" to Stock("NFLX", "Netflix Inc.", 598.34, -3.21, -0.53),
-            "CRM" to Stock("CRM", "Salesforce Inc.", 267.89, 4.56, 1.73),
-            "INTC" to Stock("INTC", "Intel Corporation", 42.18, -0.87, -2.02),
-            "AMD" to Stock("AMD", "Advanced Micro Devices", 152.44, 6.23, 4.26)
-        )
-    }
-
-    // Filter to only show stocks in the watchlist
-    val displayStocks = remember(watchlistStocks) {
-        watchlistStocks.mapNotNull { symbol -> allStockData[symbol] }
+    // Filter to only show stocks in the watchlist with their data
+    val displayStocks = remember(watchlistStocks, stockDataMap) {
+        watchlistStocks.mapNotNull { symbol -> stockDataMap[symbol] }
     }
 
     Column(
@@ -60,7 +45,7 @@ fun WatchlistScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Header with search
+        // Header with refresh and search buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -72,11 +57,23 @@ fun WatchlistScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            IconButton(onClick = onSearchClick) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Search stocks"
-                )
+            Row {
+                IconButton(
+                    onClick = onRefresh,
+                    enabled = !isRefreshing && watchlistStocks.isNotEmpty()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh prices"
+                    )
+                }
+
+                IconButton(onClick = onSearchClick) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search stocks"
+                    )
+                }
             }
         }
 
