@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.TrendingDown
@@ -25,16 +26,33 @@ import com.cs407.tickertock.data.Stock
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchlistScreen(
+    watchlistStocks: List<String>,
     onStockClick: (String) -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    onStockRemove: (String) -> Unit
 ) {
-    val sampleStocks = remember {
-        listOf(
-            Stock("NVDA", "NVIDIA Corporation", 875.43, 25.67, 3.02),
-            Stock("TSM", "Taiwan Semiconductor", 145.22, -2.45, -1.66),
-            Stock("QQQ", "Invesco QQQ Trust", 425.18, -5.12, -1.19),
-            Stock("APPL", "Apple Inc.", 189.95, 3.44, 1.84)
+    // Full stock data for all available stocks
+    val allStockData = remember {
+        mapOf(
+            "NVDA" to Stock("NVDA", "NVIDIA Corporation", 875.43, 25.67, 3.02),
+            "TSM" to Stock("TSM", "Taiwan Semiconductor", 145.22, -2.45, -1.66),
+            "QQQ" to Stock("QQQ", "Invesco QQQ Trust", 425.18, -5.12, -1.19),
+            "AAPL" to Stock("AAPL", "Apple Inc.", 189.95, 3.44, 1.84),
+            "MSFT" to Stock("MSFT", "Microsoft Corporation", 415.26, 8.12, 2.00),
+            "GOOGL" to Stock("GOOGL", "Alphabet Inc.", 2847.15, -15.23, -0.53),
+            "AMZN" to Stock("AMZN", "Amazon.com Inc.", 3467.42, 22.18, 0.64),
+            "META" to Stock("META", "Meta Platforms Inc.", 485.12, -7.33, -1.49),
+            "TSLA" to Stock("TSLA", "Tesla Inc.", 248.87, 12.45, 5.26),
+            "NFLX" to Stock("NFLX", "Netflix Inc.", 598.34, -3.21, -0.53),
+            "CRM" to Stock("CRM", "Salesforce Inc.", 267.89, 4.56, 1.73),
+            "INTC" to Stock("INTC", "Intel Corporation", 42.18, -0.87, -2.02),
+            "AMD" to Stock("AMD", "Advanced Micro Devices", 152.44, 6.23, 4.26)
         )
+    }
+
+    // Filter to only show stocks in the watchlist
+    val displayStocks = remember(watchlistStocks) {
+        watchlistStocks.mapNotNull { symbol -> allStockData[symbol] }
     }
 
     Column(
@@ -53,7 +71,7 @@ fun WatchlistScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
-            
+
             IconButton(onClick = onSearchClick) {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -61,17 +79,18 @@ fun WatchlistScreen(
                 )
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Stock list
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(sampleStocks) { stock ->
+            items(displayStocks) { stock ->
                 StockCard(
                     stock = stock,
-                    onClick = { onStockClick(stock.symbol) }
+                    onClick = { onStockClick(stock.symbol) },
+                    onRemove = { onStockRemove(stock.symbol) }
                 )
             }
         }
@@ -81,12 +100,11 @@ fun WatchlistScreen(
 @Composable
 fun StockCard(
     stock: Stock,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRemove: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -97,48 +115,67 @@ fun StockCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = stock.symbol,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stock.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            // Delete icon on the left
+            IconButton(onClick = onRemove) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Remove stock",
+                    tint = MaterialTheme.colorScheme.error
                 )
             }
-            
-            Column(
-                horizontalAlignment = Alignment.End
+
+            // Stock info (clickable)
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onClick() }
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "$${String.format("%.2f", stock.currentPrice)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = if (stock.isPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
-                        contentDescription = null,
-                        tint = if (stock.isPositive) Color(0xFF4CAF50) else Color(0xFFF44336),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.width(4.dp))
-                    
                     Text(
-                        text = "${if (stock.isPositive) "+" else ""}${String.format("%.2f", stock.priceChange)} (${if (stock.isPositive) "+" else ""}${String.format("%.2f", stock.percentageChange)}%)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (stock.isPositive) Color(0xFF4CAF50) else Color(0xFFF44336),
-                        fontWeight = FontWeight.Medium
+                        text = stock.symbol,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
+                    Text(
+                        text = stock.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        text = "$${String.format("%.2f", stock.currentPrice)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (stock.isPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                            contentDescription = null,
+                            tint = if (stock.isPositive) Color(0xFF4CAF50) else Color(0xFFF44336),
+                            modifier = Modifier.size(16.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        Text(
+                            text = "${if (stock.isPositive) "+" else ""}${String.format("%.2f", stock.priceChange)} (${if (stock.isPositive) "+" else ""}${String.format("%.2f", stock.percentageChange)}%)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (stock.isPositive) Color(0xFF4CAF50) else Color(0xFFF44336),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }

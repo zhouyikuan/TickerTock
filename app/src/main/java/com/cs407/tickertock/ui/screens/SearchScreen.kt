@@ -19,12 +19,16 @@ import com.cs407.tickertock.data.Stock
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
+    watchlistStocks: List<String>,
     onStockAdd: (String) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    
-    val availableStocks = remember {
+
+    val allStocks = remember {
         listOf(
+            Stock("NVDA", "NVIDIA Corporation", 875.43, 25.67, 3.02),
+            Stock("TSM", "Taiwan Semiconductor", 145.22, -2.45, -1.66),
+            Stock("QQQ", "Invesco QQQ Trust", 425.18, -5.12, -1.19),
             Stock("AAPL", "Apple Inc.", 189.95, 3.44, 1.84),
             Stock("MSFT", "Microsoft Corporation", 415.26, 8.12, 2.00),
             Stock("GOOGL", "Alphabet Inc.", 2847.15, -15.23, -0.53),
@@ -37,18 +41,23 @@ fun SearchScreen(
             Stock("AMD", "Advanced Micro Devices", 152.44, 6.23, 4.26)
         )
     }
-    
-    val filteredStocks = remember(searchQuery) {
+
+    // Filter out stocks already in watchlist and apply search query
+    val filteredStocks = remember(searchQuery, watchlistStocks) {
+        val availableStocks = allStocks.filter { stock ->
+            stock.symbol !in watchlistStocks
+        }
+
         if (searchQuery.isBlank()) {
             availableStocks
         } else {
             availableStocks.filter { stock ->
                 stock.symbol.contains(searchQuery, ignoreCase = true) ||
-                stock.name.contains(searchQuery, ignoreCase = true)
+                        stock.name.contains(searchQuery, ignoreCase = true)
             }
         }
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -60,9 +69,9 @@ fun SearchScreen(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Search field
         OutlinedTextField(
             value = searchQuery,
@@ -78,9 +87,9 @@ fun SearchScreen(
             singleLine = true,
             shape = RoundedCornerShape(12.dp)
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Results
         if (filteredStocks.isEmpty()) {
             Box(
@@ -138,16 +147,16 @@ fun SearchResultCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 Text(
                     text = "$${String.format("%.2f", stock.currentPrice)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
+
             IconButton(
                 onClick = onAddClick
             ) {
