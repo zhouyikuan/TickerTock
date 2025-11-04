@@ -21,18 +21,14 @@ import com.cs407.tickertock.data.AISummary
 @Composable
 fun AISummaryScreen(
     swipedArticles: Map<String, Set<String>>,
+    newsDataMap: Map<String, List<com.cs407.tickertock.data.NewsArticle>>,
     onStockClick: (String) -> Unit = {}
 ) {
-    // Get stocks that have swiped articles and extract article titles
+    // Get stocks that have swiped articles and count them
     val stocksWithSwipedArticles = remember(swipedArticles) {
         swipedArticles.filter { it.value.isNotEmpty() }.map { (stockSymbol, articleIds) ->
-            val titles = articleIds.map { articleId ->
-                // Extract article number from ID like "NVDA_1" -> "NVDA Title 1"
-                val articleNum = articleId.substringAfterLast("_")
-                "$stockSymbol Title $articleNum"
-            }.joinToString(", ")
-
-            stockSymbol to titles
+            val count = articleIds.size
+            stockSymbol to count
         }
     }
 
@@ -82,10 +78,10 @@ fun AISummaryScreen(
         }
 
         items(stocksWithSwipedArticles.size) { index ->
-            val (stockSymbol, titles) = stocksWithSwipedArticles[index]
+            val (stockSymbol, count) = stocksWithSwipedArticles[index]
             StockSummaryCard(
                 stockSymbol = stockSymbol,
-                articleTitles = titles,
+                articleCount = count,
                 onClick = { onStockClick(stockSymbol) }
             )
         }
@@ -95,7 +91,7 @@ fun AISummaryScreen(
 @Composable
 fun StockSummaryCard(
     stockSymbol: String,
-    articleTitles: String,
+    articleCount: Int,
     onClick: () -> Unit
 ) {
     Card(
@@ -117,7 +113,7 @@ fun StockSummaryCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = articleTitles,
+                text = "You swiped right on $articleCount article${if (articleCount != 1) "s" else ""}",
                 style = MaterialTheme.typography.bodyMedium,
                 lineHeight = 20.sp
             )
@@ -130,6 +126,7 @@ fun StockSummaryCard(
 fun DetailedAISummaryScreen(
     stockSymbol: String,
     swipedArticles: Map<String, Set<String>>,
+    newsDataMap: Map<String, List<com.cs407.tickertock.data.NewsArticle>>,
     onBackClick: () -> Unit = {}
 ) {
     // Get the articles that were swiped for this stock
@@ -137,16 +134,11 @@ fun DetailedAISummaryScreen(
         swipedArticles[stockSymbol] ?: emptySet()
     }
 
-    // Generate article details from the IDs
-    val articles = remember(swipedArticleIds) {
-        swipedArticleIds.map { articleId ->
-            val articleNum = articleId.substringAfterLast("_")
-            mapOf(
-                "title" to "$stockSymbol Title $articleNum",
-                "publisher" to "$stockSymbol Publisher $articleNum",
-                "time" to "$stockSymbol Time $articleNum",
-                "body" to "$stockSymbol Body $articleNum"
-            )
+    // Get actual article details from the news data
+    val articles = remember(swipedArticleIds, newsDataMap) {
+        val allArticles = newsDataMap[stockSymbol] ?: emptyList()
+        swipedArticleIds.mapNotNull { articleId ->
+            allArticles.find { it.id == articleId }
         }
     }
 
@@ -201,7 +193,7 @@ fun DetailedAISummaryScreen(
             }
 
             items(articles.size) { index ->
-                val article = articles.elementAt(index)
+                val article = articles[index]
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -211,7 +203,7 @@ fun DetailedAISummaryScreen(
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Text(
-                            text = article["title"] ?: "",
+                            text = article.title,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -219,7 +211,7 @@ fun DetailedAISummaryScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "${article["time"]} by ${article["publisher"]}",
+                            text = "${article.publishedAt} by ${article.publisher}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -227,7 +219,7 @@ fun DetailedAISummaryScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = article["body"] ?: "",
+                            text = article.summary,
                             style = MaterialTheme.typography.bodyMedium,
                             lineHeight = 20.sp
                         )
