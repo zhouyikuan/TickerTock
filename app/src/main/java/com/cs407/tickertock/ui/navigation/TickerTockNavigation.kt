@@ -9,17 +9,24 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.compose.ui.text.style.TextAlign
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.cs407.tickertock.api.ApiKeyManager
+import com.cs407.tickertock.data.NewsArticle
+import com.cs407.tickertock.data.Stock
+import com.cs407.tickertock.repository.StockRepository
 import com.cs407.tickertock.ui.screens.AISummaryScreen
 import com.cs407.tickertock.ui.screens.DetailedAISummaryScreen
 import com.cs407.tickertock.ui.screens.NewsScreen
 import com.cs407.tickertock.ui.screens.SearchScreen
 import com.cs407.tickertock.ui.screens.WatchlistScreen
+import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     object Watchlist : Screen("watchlist", "W", Icons.Default.List)
@@ -29,16 +36,64 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object Search : Screen("search", "Search", Icons.Default.List)
 }
 
+@Composable
+fun BottomNavigationBar(navController: NavController) {
+    val items = listOf(
+        Screen.Watchlist,
+        Screen.News,
+        Screen.AISummary
+    )
+
+    NavigationBar {
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route
+
+        items.forEach { screen ->
+            NavigationBarItem(
+                icon = { Icon(screen.icon, contentDescription = screen.title) },
+                label = { Text(screen.title) },
+                selected = currentRoute == screen.route,
+                onClick = {
+                    navController.navigate(screen.route) {
+                        popUpTo(navController.graph.startDestinationId)
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TickerTockNavigation(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
-    var selectedStock by remember { mutableStateOf("NVDA") }
+    val repository = remember { StockRepository.getInstance() }
+    val coroutineScope = rememberCoroutineScope()
+
+    var selectedStock by remember { mutableStateOf("") }
     var watchlistStocks by remember {
-        mutableStateOf(listOf("NVDA", "TSM", "QQQ", "AAPL"))
+        mutableStateOf(emptyList<String>())
     }
+    val maxWatchlistSize = 3
+
+    // Stock data state
+    var stockDataMap by remember {
+        mutableStateOf<Map<String, Stock>>(emptyMap())
+    }
+
+    // News data state
+    var newsDataMap by remember {
+        mutableStateOf<Map<String, List<NewsArticle>>>(emptyMap())
+    }
+
+    // Loading states
+    var isLoadingStock by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
     // Track which articles have been swiped right for each stock
     var swipedArticles by remember {
         mutableStateOf<Map<String, Set<String>>>(emptyMap())
@@ -52,56 +107,93 @@ fun TickerTockNavigation(
         mutableStateOf<Set<String>>(emptySet())
     }
 
-    Scaffold(
-        modifier = modifier,
-        bottomBar = {
-            BottomNavigationBar(navController = navController)
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            NavHost(
-                navController = navController,
-                startDestination = Screen.Watchlist.route
+    // Show loading or error overlay
+    Box(modifier = modifier) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                BottomNavigationBar(navController = navController)
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
             ) {
-                composable(Screen.Watchlist.route) {
-                    WatchlistScreen(
-                        watchlistStocks = watchlistStocks,
-                        onStockClick = { stock ->
-                            selectedStock = stock
-                            navController.navigate(Screen.News.route)
-                        },
-                        onSearchClick = {
-                            navController.navigate(Screen.Search.route)
-                        },
-                        onStockRemove = { stockSymbol ->
-                            // Remove from watchlist
-                            watchlistStocks = watchlistStocks.filter { it != stockSymbol }
-
-                            // Clear all data for this stock
-                            swipedArticles = swipedArticles - stockSymbol
-                            articleIndexPerStock = articleIndexPerStock - stockSymbol
-                            endMessageShownForStocks = endMessageShownForStocks - stockSymbol
-
-                            // Update selected stock
-                            if (selectedStock == stockSymbol) {
-                                selectedStock = if (watchlistStocks.isNotEmpty()) {
-                                    watchlistStocks.first()
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Watchlist.route
+                ) {
+                    composable(Screen.Watchlist.route) {
+                        WatchlistScreen(
+                            watchlistStocks = watchlistStocks,
+                            stockDataMap = stockDataMap,
+                            isRefreshing = isRefreshing,
+                            onStockClick = { stock ->
+                                selectedStock = stock
+                                navController.navigate(Screen.News.route)
+                            },
+                            onSearchClick = {
+                                if (watchlistStocks.size >= maxWatchlistSize) {
+                                    errorMessage = "Maximum $maxWatchlistSize stocks allowed in watchlist"
                                 } else {
-                                    "" // Empty string when no stocks left
+                                    navController.navigate(Screen.Search.route)
+                                }
+                            },
+                            onRefresh = {
+                                if (watchlistStocks.isNotEmpty()) {
+                                    isRefreshing = true
+                                    errorMessage = null
+                                    coroutineScope.launch {
+                                        val result = repository.refreshStockPrices(watchlistStocks)
+                                        isRefreshing = false
+                                        if (result.isSuccess) {
+                                            val stocks = result.getOrThrow()
+                                            val newStockDataMap = stockDataMap.toMutableMap()
+                                            stocks.forEach { stock ->
+                                                newStockDataMap[stock.symbol] = stock
+                                            }
+                                            stockDataMap = newStockDataMap
+                                        } else {
+                                            val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                                            if (errorMsg.contains("rate limit")) {
+                                                errorMessage = "API key limit reached. Please try again later."
+                                            } else {
+                                                errorMessage = "Failed to refresh: $errorMsg"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            onStockRemove = { stockSymbol ->
+                                // Remove from watchlist
+                                watchlistStocks = watchlistStocks.filter { it != stockSymbol }
+
+                                // Clear all data for this stock
+                                swipedArticles = swipedArticles - stockSymbol
+                                articleIndexPerStock = articleIndexPerStock - stockSymbol
+                                endMessageShownForStocks = endMessageShownForStocks - stockSymbol
+                                stockDataMap = stockDataMap - stockSymbol
+                                newsDataMap = newsDataMap - stockSymbol
+                                repository.clearCache(stockSymbol)
+
+                                // Update selected stock
+                                if (selectedStock == stockSymbol) {
+                                    selectedStock = if (watchlistStocks.isNotEmpty()) {
+                                        watchlistStocks.first()
+                                    } else {
+                                        "" // Empty string when no stocks left
+                                    }
                                 }
                             }
-                        }
-                    )
-                }
+                        )
+                    }
 
                 composable(Screen.News.route) {
                     NewsScreen(
                         stockSymbol = selectedStock,
                         watchlistStocks = watchlistStocks,
+                        newsDataMap = newsDataMap,
                         articleIndexPerStock = articleIndexPerStock,
                         endMessageShownForStocks = endMessageShownForStocks,
                         onAISummaryClick = {
@@ -127,6 +219,7 @@ fun TickerTockNavigation(
                 composable(Screen.AISummary.route) {
                     AISummaryScreen(
                         swipedArticles = swipedArticles,
+                        newsDataMap = newsDataMap,
                         onStockClick = { stockSymbol ->
                             navController.navigate("detailed_ai_summary/$stockSymbol")
                         }
@@ -138,6 +231,7 @@ fun TickerTockNavigation(
                     DetailedAISummaryScreen(
                         stockSymbol = stockSymbol,
                         swipedArticles = swipedArticles,
+                        newsDataMap = newsDataMap,
                         onBackClick = {
                             navController.popBackStack()
                         }
@@ -148,42 +242,66 @@ fun TickerTockNavigation(
                     SearchScreen(
                         watchlistStocks = watchlistStocks,
                         onStockAdd = { stockSymbol ->
-                            if (stockSymbol !in watchlistStocks) {
-                                watchlistStocks = watchlistStocks + stockSymbol
+                            if (stockSymbol !in watchlistStocks && watchlistStocks.size < maxWatchlistSize) {
+                                isLoadingStock = true
+                                errorMessage = null
+                                coroutineScope.launch {
+                                    val result = repository.fetchStockAndNews(stockSymbol)
+                                    isLoadingStock = false
+                                    if (result.isSuccess) {
+                                        val (stock, news) = result.getOrThrow()
+                                        // Add to watchlist
+                                        watchlistStocks = watchlistStocks + stockSymbol
+                                        // Store data
+                                        stockDataMap = stockDataMap + (stockSymbol to stock)
+                                        newsDataMap = newsDataMap + (stockSymbol to news)
+                                        // Set as selected stock if it's the first one
+                                        if (selectedStock.isEmpty()) {
+                                            selectedStock = stockSymbol
+                                        }
+                                        navController.popBackStack()
+                                    } else {
+                                        val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                                        if (errorMsg.contains("rate limit")) {
+                                            errorMessage = "API key limit reached. Please try again later."
+                                        } else if (errorMsg.contains("No news available")) {
+                                            errorMessage = "No news available for $stockSymbol"
+                                        } else {
+                                            errorMessage = "Failed to add stock: $errorMsg"
+                                        }
+                                    }
+                                }
                             }
-                            navController.popBackStack()
                         }
                     )
                 }
             }
         }
-    }
-}
 
-@Composable
-fun BottomNavigationBar(navController: NavController) {
-    val items = listOf(
-        Screen.Watchlist,
-        Screen.News,
-        Screen.AISummary
-    )
-    
-    NavigationBar {
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = navBackStackEntry?.destination?.route
-        
-        items.forEach { screen ->
-            NavigationBarItem(
-                icon = { Icon(screen.icon, contentDescription = screen.title) },
-                label = { Text(screen.title) },
-                selected = currentRoute == screen.route,
-                onClick = {
-                    navController.navigate(screen.route) {
-                        popUpTo(navController.graph.startDestinationId)
-                        launchSingleTop = true
+        // Loading indicator
+        if (isLoadingStock || isRefreshing) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+
+        // Error dialog
+        errorMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { errorMessage = null },
+                title = { Text("Error") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { errorMessage = null }) {
+                        Text("OK")
                     }
                 }
             )
         }
     }
+    }
+
 }
