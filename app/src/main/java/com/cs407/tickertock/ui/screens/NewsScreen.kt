@@ -31,6 +31,7 @@ import kotlin.math.abs
 fun NewsScreen(
     stockSymbol: String,
     watchlistStocks: List<String>,
+    newsDataMap: Map<String, List<NewsArticle>>,
     articleIndexPerStock: Map<String, Int>,
     endMessageShownForStocks: Set<String>,
     onAISummaryClick: () -> Unit,
@@ -47,19 +48,9 @@ fun NewsScreen(
     val currentArticleIndex = articleIndexPerStock[stockSymbol] ?: 0
     val showEndMessage = stockSymbol in endMessageShownForStocks
 
-    // Generate 3 articles for each stock with placeholder naming
-    val sampleArticles = remember(stockSymbol) {
-        List(3) { index ->
-            val articleNum = index + 1
-            NewsArticle(
-                id = "${stockSymbol}_$articleNum",
-                title = "${stockSymbol} Title $articleNum",
-                summary = "${stockSymbol} Body $articleNum",
-                publishedAt = "${stockSymbol} Time $articleNum",
-                publisher = "${stockSymbol} Publisher $articleNum",
-                stockSymbol = stockSymbol
-            )
-        }
+    // Get articles from API data
+    val articles = remember(stockSymbol, newsDataMap) {
+        newsDataMap[stockSymbol] ?: emptyList()
     }
 
     var totalDragX by remember { mutableStateOf(0f) }
@@ -99,11 +90,11 @@ fun NewsScreen(
                             if (!showEndMessage) {
                                 if (totalDragX > 0) {
                                     // Swipe right - include article
-                                    if (sampleArticles.isNotEmpty() && currentArticleIndex < sampleArticles.size) {
-                                        val currentArticle = sampleArticles[currentArticleIndex]
+                                    if (articles.isNotEmpty() && currentArticleIndex < articles.size) {
+                                        val currentArticle = articles[currentArticleIndex]
                                         onArticleSwiped(stockSymbol, currentArticle.id)
 
-                                        if (currentArticleIndex == sampleArticles.size - 1) {
+                                        if (currentArticleIndex == articles.size - 1) {
                                             // Just swiped on the last article - show end message
                                             onEndMessageShown(stockSymbol)
                                         } else {
@@ -112,8 +103,8 @@ fun NewsScreen(
                                     }
                                 } else {
                                     // Swipe left - skip article
-                                    if (sampleArticles.isNotEmpty()) {
-                                        if (currentArticleIndex == sampleArticles.size - 1) {
+                                    if (articles.isNotEmpty()) {
+                                        if (currentArticleIndex == articles.size - 1) {
                                             // Just swiped on the last article - show end message
                                             onEndMessageShown(stockSymbol)
                                         } else {
@@ -213,8 +204,8 @@ fun NewsScreen(
                     )
                 }
             }
-        } else if (sampleArticles.isNotEmpty() && currentArticleIndex < sampleArticles.size) {
-            val currentArticle = sampleArticles[currentArticleIndex]
+        } else if (articles.isNotEmpty() && currentArticleIndex < articles.size) {
+            val currentArticle = articles[currentArticleIndex]
 
             Card(
                 modifier = Modifier
@@ -297,11 +288,11 @@ fun NewsScreen(
                 )
             }
         }
-        
+
         // Article counter
-        if (sampleArticles.isNotEmpty()) {
+        if (articles.isNotEmpty() && !showEndMessage) {
             Text(
-                text = "${currentArticleIndex + 1} of ${sampleArticles.size}",
+                text = "${currentArticleIndex + 1} of ${articles.size}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
