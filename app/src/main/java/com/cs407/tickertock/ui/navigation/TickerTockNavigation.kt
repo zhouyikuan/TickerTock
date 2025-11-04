@@ -36,7 +36,22 @@ fun TickerTockNavigation(
     modifier: Modifier = Modifier
 ) {
     var selectedStock by remember { mutableStateOf("NVDA") }
-    
+    var watchlistStocks by remember {
+        mutableStateOf(listOf("NVDA", "TSM", "QQQ", "AAPL"))
+    }
+    // Track which articles have been swiped right for each stock
+    var swipedArticles by remember {
+        mutableStateOf<Map<String, Set<String>>>(emptyMap())
+    }
+    // Track article index per stock (persists across navigation)
+    var articleIndexPerStock by remember {
+        mutableStateOf<Map<String, Int>>(emptyMap())
+    }
+    // Track which stocks have shown the end message
+    var endMessageShownForStocks by remember {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+
     Scaffold(
         modifier = modifier,
         bottomBar = {
@@ -54,46 +69,88 @@ fun TickerTockNavigation(
             ) {
                 composable(Screen.Watchlist.route) {
                     WatchlistScreen(
+                        watchlistStocks = watchlistStocks,
                         onStockClick = { stock ->
                             selectedStock = stock
                             navController.navigate(Screen.News.route)
                         },
                         onSearchClick = {
                             navController.navigate(Screen.Search.route)
+                        },
+                        onStockRemove = { stockSymbol ->
+                            // Remove from watchlist
+                            watchlistStocks = watchlistStocks.filter { it != stockSymbol }
+
+                            // Clear all data for this stock
+                            swipedArticles = swipedArticles - stockSymbol
+                            articleIndexPerStock = articleIndexPerStock - stockSymbol
+                            endMessageShownForStocks = endMessageShownForStocks - stockSymbol
+
+                            // Update selected stock
+                            if (selectedStock == stockSymbol) {
+                                selectedStock = if (watchlistStocks.isNotEmpty()) {
+                                    watchlistStocks.first()
+                                } else {
+                                    "" // Empty string when no stocks left
+                                }
+                            }
                         }
                     )
                 }
-                
+
                 composable(Screen.News.route) {
                     NewsScreen(
                         stockSymbol = selectedStock,
+                        watchlistStocks = watchlistStocks,
+                        articleIndexPerStock = articleIndexPerStock,
+                        endMessageShownForStocks = endMessageShownForStocks,
                         onAISummaryClick = {
-                            navController.navigate(Screen.AISummary.route)
+                            // Navigate to detailed AI summary for the current stock
+                            navController.navigate("detailed_ai_summary/$selectedStock")
                         },
                         onStockChange = { newStock ->
                             selectedStock = newStock
+                        },
+                        onArticleSwiped = { stockSymbol, articleId ->
+                            val currentArticles = swipedArticles[stockSymbol] ?: emptySet()
+                            swipedArticles = swipedArticles + (stockSymbol to (currentArticles + articleId))
+                        },
+                        onArticleIndexChanged = { stockSymbol, newIndex ->
+                            articleIndexPerStock = articleIndexPerStock + (stockSymbol to newIndex)
+                        },
+                        onEndMessageShown = { stockSymbol ->
+                            endMessageShownForStocks = endMessageShownForStocks + stockSymbol
                         }
                     )
                 }
-                
+
                 composable(Screen.AISummary.route) {
                     AISummaryScreen(
+                        swipedArticles = swipedArticles,
                         onStockClick = { stockSymbol ->
                             navController.navigate("detailed_ai_summary/$stockSymbol")
                         }
                     )
                 }
-                
+
                 composable(Screen.DetailedAISummary.route) { backStackEntry ->
                     val stockSymbol = backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
                     DetailedAISummaryScreen(
-                        stockSymbol = stockSymbol
+                        stockSymbol = stockSymbol,
+                        swipedArticles = swipedArticles,
+                        onBackClick = {
+                            navController.popBackStack()
+                        }
                     )
                 }
-                
+
                 composable(Screen.Search.route) {
                     SearchScreen(
-                        onStockAdd = { stock ->
+                        watchlistStocks = watchlistStocks,
+                        onStockAdd = { stockSymbol ->
+                            if (stockSymbol !in watchlistStocks) {
+                                watchlistStocks = watchlistStocks + stockSymbol
+                            }
                             navController.popBackStack()
                         }
                     )
