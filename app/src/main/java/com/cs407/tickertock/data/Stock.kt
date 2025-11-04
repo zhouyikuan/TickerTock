@@ -15,6 +15,7 @@ data class NewsArticle(
     val title: String,
     val summary: String,
     val publishedAt: String,
+    val publisher: String,
     val stockSymbol: String,
     val isSelected: Boolean = false
 )
