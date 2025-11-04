@@ -30,187 +30,198 @@ import kotlin.math.abs
 @Composable
 fun NewsScreen(
     stockSymbol: String,
+    watchlistStocks: List<String>,
+    articleIndexPerStock: Map<String, Int>,
+    endMessageShownForStocks: Set<String>,
     onAISummaryClick: () -> Unit,
-    onStockChange: (String) -> Unit
+    onStockChange: (String) -> Unit,
+    onArticleSwiped: (String, String) -> Unit,
+    onArticleIndexChanged: (String, Int) -> Unit,
+    onEndMessageShown: (String) -> Unit
 ) {
-    val stocks = remember {
-        listOf("NVDA", "TSM", "QQQ", "APPL")
+    var currentStockIndex by remember(stockSymbol, watchlistStocks) {
+        mutableStateOf(watchlistStocks.indexOf(stockSymbol).takeIf { it >= 0 } ?: 0)
     }
-    
-    var currentStockIndex by remember(stockSymbol) {
-        mutableStateOf(stocks.indexOf(stockSymbol).takeIf { it >= 0 } ?: 0)
-    }
-    
-    var currentArticleIndex by remember(stockSymbol) {
-        mutableStateOf(0)
-    }
-    
+
+    // Get current article index for this stock
+    val currentArticleIndex = articleIndexPerStock[stockSymbol] ?: 0
+    val showEndMessage = stockSymbol in endMessageShownForStocks
+
+    // Generate 3 articles for each stock with placeholder naming
     val sampleArticles = remember(stockSymbol) {
-        when (stockSymbol) {
-            "NVDA" -> listOf(
-                NewsArticle(
-                    id = "1",
-                    title = "NVIDIA Announces Revolutionary AI Chip Architecture",
-                    summary = "NVIDIA unveiled its next-generation GPU architecture designed specifically for AI workloads, promising 40% better performance per watt compared to previous generation. The new chips are expected to drive significant revenue growth in data center segment.",
-                    publishedAt = "2 hours ago",
-                    stockSymbol = "NVDA"
-                ),
-                NewsArticle(
-                    id = "2",
-                    title = "Partnership with Major Cloud Providers Expands",
-                    summary = "NVIDIA announced strategic partnerships with leading cloud service providers to integrate their AI accelerators into cloud infrastructure. This move is expected to increase market penetration and recurring revenue streams.",
-                    publishedAt = "4 hours ago",
-                    stockSymbol = "NVDA"
-                )
-            )
-            "TSM" -> listOf(
-                NewsArticle(
-                    id = "3",
-                    title = "Taiwan Semiconductor Reports Strong Q4 Earnings",
-                    summary = "TSM exceeded quarterly expectations with robust demand for advanced node semiconductors. Revenue grew 15% YoY driven by AI and automotive chip segments.",
-                    publishedAt = "1 hour ago",
-                    stockSymbol = "TSM"
-                )
-            )
-            else -> listOf(
-                NewsArticle(
-                    id = "4",
-                    title = "Market Analysis for ${stockSymbol}",
-                    summary = "Latest market trends and analysis for ${stockSymbol} showing mixed signals from technical indicators.",
-                    publishedAt = "3 hours ago",
-                    stockSymbol = stockSymbol
-                )
+        List(3) { index ->
+            val articleNum = index + 1
+            NewsArticle(
+                id = "${stockSymbol}_$articleNum",
+                title = "${stockSymbol} Title $articleNum",
+                summary = "${stockSymbol} Body $articleNum",
+                publishedAt = "${stockSymbol} Time $articleNum",
+                publisher = "${stockSymbol} Publisher $articleNum",
+                stockSymbol = stockSymbol
             )
         }
     }
-    
-    var selectedArticles by remember { mutableStateOf(setOf<String>()) }
-    
-    LaunchedEffect(currentStockIndex) {
-        if (currentStockIndex in stocks.indices) {
-            onStockChange(stocks[currentStockIndex])
+
+    var totalDragX by remember { mutableStateOf(0f) }
+    var totalDragY by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(currentStockIndex, watchlistStocks) {
+        if (currentStockIndex in watchlistStocks.indices) {
+            onStockChange(watchlistStocks[currentStockIndex])
         }
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-            .pointerInput(Unit) {
+            .pointerInput(currentStockIndex, currentArticleIndex) {
                 detectDragGestures(
-                    onDragEnd = { 
-                        // Reset article index when changing stocks
-                        currentArticleIndex = 0
-                    }
-                ) { change, dragAmount ->
-                    // Vertical swipe to change stocks
-                    if (abs(dragAmount.y) > abs(dragAmount.x)) {
-                        if (dragAmount.y > 50) {
-                            // Swipe down - previous stock
-                            if (currentStockIndex > 0) {
-                                currentStockIndex--
-                            }
-                        } else if (dragAmount.y < -50) {
-                            // Swipe up - next stock
-                            if (currentStockIndex < stocks.size - 1) {
-                                currentStockIndex++
-                            }
-                        }
-                    }
-                    // Horizontal swipe to navigate articles
-                    else if (abs(dragAmount.x) > abs(dragAmount.y)) {
-                        if (dragAmount.x > 50) {
-                            // Swipe right - include article
-                            if (sampleArticles.isNotEmpty()) {
-                                selectedArticles = selectedArticles + sampleArticles[currentArticleIndex].id
-                                if (currentArticleIndex < sampleArticles.size - 1) {
-                                    currentArticleIndex++
+                    onDragStart = {
+                        totalDragX = 0f
+                        totalDragY = 0f
+                    },
+                    onDragEnd = {
+                        // Determine if we should change stock or article based on total drag
+                        if (abs(totalDragY) > abs(totalDragX) && abs(totalDragY) > 100) {
+                            if (totalDragY > 0) {
+                                // Swipe down - previous stock
+                                if (currentStockIndex > 0) {
+                                    currentStockIndex--
+                                }
+                            } else {
+                                // Swipe up - next stock
+                                if (currentStockIndex < watchlistStocks.size - 1) {
+                                    currentStockIndex++
                                 }
                             }
-                        } else if (dragAmount.x < -50) {
-                            // Swipe left - skip article
-                            if (currentArticleIndex < sampleArticles.size - 1) {
-                                currentArticleIndex++
+                        } else if (abs(totalDragX) > abs(totalDragY) && abs(totalDragX) > 100) {
+                            if (!showEndMessage) {
+                                if (totalDragX > 0) {
+                                    // Swipe right - include article
+                                    if (sampleArticles.isNotEmpty() && currentArticleIndex < sampleArticles.size) {
+                                        val currentArticle = sampleArticles[currentArticleIndex]
+                                        onArticleSwiped(stockSymbol, currentArticle.id)
+
+                                        if (currentArticleIndex == sampleArticles.size - 1) {
+                                            // Just swiped on the last article - show end message
+                                            onEndMessageShown(stockSymbol)
+                                        } else {
+                                            onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+                                        }
+                                    }
+                                } else {
+                                    // Swipe left - skip article
+                                    if (sampleArticles.isNotEmpty()) {
+                                        if (currentArticleIndex == sampleArticles.size - 1) {
+                                            // Just swiped on the last article - show end message
+                                            onEndMessageShown(stockSymbol)
+                                        } else {
+                                            onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+                                        }
+                                    }
+                                }
                             }
                         }
+                        totalDragX = 0f
+                        totalDragY = 0f
                     }
+                ) { change, dragAmount ->
+                    totalDragX += dragAmount.x
+                    totalDragY += dragAmount.y
+                    change.consume()
                 }
             }
     ) {
-        // Header with AI Summary button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = onAISummaryClick,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+        // Check if watchlist is empty
+        if (watchlistStocks.isEmpty() || stockSymbol.isEmpty()) {
+            // Empty state
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                Text(
+                    text = "Your watchlist is empty.\nAdd stocks to get started!",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("AI Summary")
             }
-            
+        } else {
+            // Stock symbol header (centered)
             Text(
                 text = stockSymbol,
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
             )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Stock navigation indicators
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowUp,
-                contentDescription = "Previous stock",
-                tint = if (currentStockIndex > 0) MaterialTheme.colorScheme.primary else Color.Gray
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Swipe up/down to change stocks",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Next stock",
-                tint = if (currentStockIndex < stocks.size - 1) MaterialTheme.colorScheme.primary else Color.Gray
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Article display
-        if (sampleArticles.isNotEmpty() && currentArticleIndex < sampleArticles.size) {
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Stock navigation indicators
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Previous stock",
+                    tint = if (currentStockIndex > 0) MaterialTheme.colorScheme.primary else Color.Gray
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Swipe up/down to change stocks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Next stock",
+                    tint = if (currentStockIndex < watchlistStocks.size - 1) MaterialTheme.colorScheme.primary else Color.Gray
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Article display or AI Summary button
+        if (showEndMessage) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Button(
+                    onClick = onAISummaryClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Generate AI Summary",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+            }
+        } else if (sampleArticles.isNotEmpty() && currentArticleIndex < sampleArticles.size) {
             val currentArticle = sampleArticles[currentArticleIndex]
-            val isSelected = selectedArticles.contains(currentArticle.id)
-            
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) 
-                        MaterialTheme.colorScheme.primaryContainer 
-                    else 
-                        MaterialTheme.colorScheme.surface
-                )
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -223,62 +234,24 @@ fun NewsScreen(
                         fontWeight = FontWeight.Bold,
                         lineHeight = 28.sp
                     )
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
-                    
+
                     Text(
-                        text = currentArticle.publishedAt,
+                        text = "${currentArticle.publishedAt} by ${currentArticle.publisher}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Text(
                         text = currentArticle.summary,
                         style = MaterialTheme.typography.bodyLarge,
                         lineHeight = 24.sp
                     )
-                    
+
                     Spacer(modifier = Modifier.weight(1f))
-                    
-                    if (isSelected) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(20.dp)
-                            ) {
-                                Text(
-                                    text = "✓ Selected for AI Summary",
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            // No articles available
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No articles available for $stockSymbol",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center
-                    )
                 }
             }
         }
@@ -333,6 +306,7 @@ fun NewsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
+        }
         }
     }
 }
