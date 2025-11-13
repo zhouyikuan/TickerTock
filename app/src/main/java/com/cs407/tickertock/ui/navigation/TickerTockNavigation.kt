@@ -21,6 +21,7 @@ import com.cs407.tickertock.api.ApiKeyManager
 import com.cs407.tickertock.data.NewsArticle
 import com.cs407.tickertock.data.Stock
 import com.cs407.tickertock.repository.StockRepository
+import com.cs407.tickertock.ui.screens.AISummaryDisplayScreen
 import com.cs407.tickertock.ui.screens.AISummaryScreen
 import com.cs407.tickertock.ui.screens.DetailedAISummaryScreen
 import com.cs407.tickertock.ui.screens.NewsScreen
@@ -33,6 +34,7 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
     object News : Screen("news", "N", Icons.Default.Newspaper)
     object AISummary : Screen("ai_summary", "AI", Icons.Default.Analytics)
     object DetailedAISummary : Screen("detailed_ai_summary/{stockSymbol}", "AI Detail", Icons.Default.Analytics)
+    object AISummaryDisplay : Screen("ai_summary_display/{stockSymbol}", "AI Summary", Icons.Default.Analytics)
     object Search : Screen("search", "Search", Icons.Default.List)
 }
 
@@ -107,6 +109,11 @@ fun TickerTockNavigation(
         mutableStateOf<Set<String>>(emptySet())
     }
 
+    // Track generated AI summaries per stock
+    var aiSummaries by remember {
+        mutableStateOf<Map<String, String>>(emptyMap())
+    }
+
     // Show loading or error overlay
     Box(modifier = modifier) {
         Scaffold(
@@ -173,6 +180,7 @@ fun TickerTockNavigation(
                                 swipedArticles = swipedArticles - stockSymbol
                                 articleIndexPerStock = articleIndexPerStock - stockSymbol
                                 endMessageShownForStocks = endMessageShownForStocks - stockSymbol
+                                aiSummaries = aiSummaries - stockSymbol
                                 stockDataMap = stockDataMap - stockSymbol
                                 newsDataMap = newsDataMap - stockSymbol
                                 repository.clearCache(stockSymbol)
@@ -232,6 +240,28 @@ fun TickerTockNavigation(
                         stockSymbol = stockSymbol,
                         swipedArticles = swipedArticles,
                         newsDataMap = newsDataMap,
+                        stockDataMap = stockDataMap,
+                        aiSummaries = aiSummaries,
+                        endMessageShownForStocks = endMessageShownForStocks,
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onGenerateSummary = { stockSymbol, summary ->
+                            aiSummaries = aiSummaries + (stockSymbol to summary)
+                            navController.navigate("ai_summary_display/$stockSymbol")
+                        },
+                        onViewSummary = { stockSymbol ->
+                            navController.navigate("ai_summary_display/$stockSymbol")
+                        }
+                    )
+                }
+
+                composable(Screen.AISummaryDisplay.route) { backStackEntry ->
+                    val stockSymbol = backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
+                    val summary = aiSummaries[stockSymbol] ?: ""
+                    AISummaryDisplayScreen(
+                        stockSymbol = stockSymbol,
+                        summary = summary,
                         onBackClick = {
                             navController.popBackStack()
                         }
