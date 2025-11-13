@@ -4,9 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,7 +18,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cs407.tickertock.api.GroqService
 import com.cs407.tickertock.data.AISummary
+import com.cs407.tickertock.data.Stock
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,8 +133,16 @@ fun DetailedAISummaryScreen(
     stockSymbol: String,
     swipedArticles: Map<String, Set<String>>,
     newsDataMap: Map<String, List<com.cs407.tickertock.data.NewsArticle>>,
-    onBackClick: () -> Unit = {}
+    stockDataMap: Map<String, Stock>,
+    aiSummaries: Map<String, String>,
+    endMessageShownForStocks: Set<String>,
+    onBackClick: () -> Unit = {},
+    onGenerateSummary: (String, String) -> Unit = { _, _ -> },
+    onViewSummary: (String) -> Unit = {}
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    var isGeneratingSummary by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     // Get the articles that were swiped for this stock
     val swipedArticleIds = remember(stockSymbol, swipedArticles) {
         swipedArticles[stockSymbol] ?: emptySet()
@@ -142,29 +156,92 @@ fun DetailedAISummaryScreen(
         }
     }
 
+    // Check if all articles have been viewed
+    val allArticles = newsDataMap[stockSymbol] ?: emptyList()
+    val hasViewedAllArticles = stockSymbol in endMessageShownForStocks
+    val hasSummary = stockSymbol in aiSummaries
+
+    // Get stock data
+    val stock = stockDataMap[stockSymbol]
+
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Back button row
+        // Header row with back button and AI button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back to AI Summaries",
-                    tint = MaterialTheme.colorScheme.primary
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back to AI Summaries",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "$stockSymbol Articles",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Swiped Articles for $stockSymbol",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
+
+            // AI Button
+            Button(
+                onClick = {
+                    if (hasSummary) {
+                        // Navigate to existing summary
+                        onViewSummary(stockSymbol)
+                    } else if (hasViewedAllArticles && stock != null) {
+                        // Generate new summary
+                        isGeneratingSummary = true
+                        errorMessage = null
+                        coroutineScope.launch {
+                            val result = GroqService.generateStockSummary(stock, articles)
+                            isGeneratingSummary = false
+                            if (result.isSuccess) {
+                                val summary = result.getOrNull()
+                                if (summary != null) {
+                                    onGenerateSummary(stockSymbol, summary)
+                                }
+                            } else {
+                                errorMessage = "Issue generating a Summary"
+                            }
+                        }
+                    }
+                },
+                enabled = hasViewedAllArticles && !isGeneratingSummary,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                if (isGeneratingSummary) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "AI",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
         }
 
         LazyColumn(
@@ -226,6 +303,155 @@ fun DetailedAISummaryScreen(
                     }
                 }
             }
+
+            // Add bottom padding
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        // Error dialog
+        errorMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { errorMessage = null },
+                title = { Text("Error") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { errorMessage = null }) {
+                        Text("OK")
+                    }
+                }
+            )
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AISummaryDisplayScreen(
+    stockSymbol: String,
+    summary: String,
+    onBackClick: () -> Unit = {}
+) {
+    // Parse the summary into sections
+    val sections = remember(summary) {
+        parseSummaryIntoSections(summary)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Header row with back button and title
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "$stockSymbol AI News",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Divider()
+
+        // Summary content with scrolling
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Executive Summary Card
+            item {
+                SummarySection(
+                    title = "Executive Summary",
+                    content = sections.executiveSummary
+                )
+            }
+
+            // Key Points Card
+            item {
+                SummarySection(
+                    title = "Key Points",
+                    content = sections.keyPoints
+                )
+            }
+
+            // Sentiment Analysis Card
+            item {
+                SummarySection(
+                    title = "Sentiment Analysis",
+                    content = sections.sentimentAnalysis
+                )
+            }
+
+            // Bottom padding
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun SummarySection(
+    title: String,
+    content: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = content,
+                style = MaterialTheme.typography.bodyLarge,
+                lineHeight = 24.sp
+            )
+        }
+    }
+}
+
+data class SummarySections(
+    val executiveSummary: String,
+    val keyPoints: String,
+    val sentimentAnalysis: String
+)
+
+fun parseSummaryIntoSections(summary: String): SummarySections {
+    // Split the summary by the section headers
+    val executiveSummaryMatch = "\\*\\*Executive Summary\\*\\*\\s*\\n(.+?)(?=\\n\\*\\*Key Points\\*\\*|$)".toRegex(RegexOption.DOT_MATCHES_ALL)
+    val keyPointsMatch = "\\*\\*Key Points\\*\\*\\s*\\n(.+?)(?=\\n\\*\\*Sentiment Analysis\\*\\*|$)".toRegex(RegexOption.DOT_MATCHES_ALL)
+    val sentimentMatch = "\\*\\*Sentiment Analysis\\*\\*\\s*\\n(.+)".toRegex(RegexOption.DOT_MATCHES_ALL)
+
+    val executiveSummary = executiveSummaryMatch.find(summary)?.groupValues?.get(1)?.trim() ?: ""
+    val keyPoints = keyPointsMatch.find(summary)?.groupValues?.get(1)?.trim() ?: ""
+    val sentimentAnalysis = sentimentMatch.find(summary)?.groupValues?.get(1)?.trim() ?: ""
+
+    return SummarySections(
+        executiveSummary = executiveSummary,
+        keyPoints = keyPoints,
+        sentimentAnalysis = sentimentAnalysis
+    )
 }
