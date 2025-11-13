@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 object GroqService {
     private const val BASE_URL = "https://api.groq.com/openai/v1/"
-    private const val API_KEY = ""
+    private const val API_KEY = "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" // Free grok API KEY
     private const val MODEL = "llama-3.1-8b-instant" // Cheapest and fastest model
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
