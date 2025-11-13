@@ -177,7 +177,7 @@ fun NewsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Article display or AI Summary button
+            // Article display or end message
         if (showEndMessage) {
             Box(
                 modifier = Modifier
@@ -185,23 +185,24 @@ fun NewsScreen(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Button(
-                    onClick = onAISummaryClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    modifier = Modifier.padding(32.dp)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        "Generate AI Summary",
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    Box(
+                        modifier = Modifier.padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Go to the AI summary page to see the articles you swiped on!",
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         } else if (articles.isNotEmpty() && currentArticleIndex < articles.size) {
