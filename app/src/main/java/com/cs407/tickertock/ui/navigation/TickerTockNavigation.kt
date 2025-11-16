@@ -29,15 +29,26 @@ import com.cs407.tickertock.ui.screens.SearchScreen
 import com.cs407.tickertock.ui.screens.WatchlistScreen
 import kotlinx.coroutines.launch
 
-sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+
+//Defines 5 navigation destinations that are in this app
+sealed class Screen(
+    val route: String,
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
     object Watchlist : Screen("watchlist", "W", Icons.Default.List)
     object News : Screen("news", "N", Icons.Default.Newspaper)
     object AISummary : Screen("ai_summary", "AI", Icons.Default.Analytics)
-    object DetailedAISummary : Screen("detailed_ai_summary/{stockSymbol}", "AI Detail", Icons.Default.Analytics)
-    object AISummaryDisplay : Screen("ai_summary_display/{stockSymbol}", "AI Summary", Icons.Default.Analytics)
+    object DetailedAISummary :
+        Screen("detailed_ai_summary/{stockSymbol}", "AI Detail", Icons.Default.Analytics)
+
+    object AISummaryDisplay :
+        Screen("ai_summary_display/{stockSymbol}", "AI Summary", Icons.Default.Analytics)
+
     object Search : Screen("search", "Search", Icons.Default.List)
 }
 
+//Shows the 3 main tabs (Watchlist, News, AI) with their icons. Clicking their tab navigates to that screen.
 @Composable
 fun BottomNavigationBar(navController: NavController) {
     val items = listOf(
@@ -66,55 +77,75 @@ fun BottomNavigationBar(navController: NavController) {
     }
 }
 
+
+//composable that holds all of the App state
 @OptIn(ExperimentalMaterial3Api::class)
+//Mat 3 gives us Bottom navigation bar, padding/spacing utility
 @Composable
 fun TickerTockNavigation(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
+    //State Variables
+    // instance that handles all API call
+    // things like repository.fetchStockAndNews(), repository.refreshStockPrices(), repository.clearCache()
     val repository = remember { StockRepository.getInstance() }
+
+    //Routine for api calls
     val coroutineScope = rememberCoroutineScope()
 
+    //Stock symbol currently being viewed in News scree
     var selectedStock by remember { mutableStateOf("") }
+
+    //List of stock symbols in user's watchlist
     var watchlistStocks by remember {
         mutableStateOf(emptyList<String>())
     }
+
+    //Limit watchlist size bc api calls are expensive
     val maxWatchlistSize = 3
 
-    // Stock data state
+    // Maps stock symbol to their price data
     var stockDataMap by remember {
         mutableStateOf<Map<String, Stock>>(emptyMap())
     }
 
-    // News data state
+    // Maps stock symbol to their news data
     var newsDataMap by remember {
         mutableStateOf<Map<String, List<NewsArticle>>>(emptyMap())
     }
 
-    // Loading states
+    // Loading states to show loading indicator CircularProgressIndicator
     var isLoadingStock by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+
+
+    //Any api issue pops up using this data
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Track which articles have been swiped right for each stock
+    //  Maps stock symbol to article IDs that user swiped right on
     var swipedArticles by remember {
         mutableStateOf<Map<String, Set<String>>>(emptyMap())
     }
-    // Track article index per stock (persists across navigation)
+
+    //  Maps stock symbol to current article index (Swiped 4 out of 20)
     var articleIndexPerStock by remember {
         mutableStateOf<Map<String, Int>>(emptyMap())
     }
-    // Track which stocks have shown the end message
+
+    // Set of stocks users has swiped completly for
     var endMessageShownForStocks by remember {
         mutableStateOf<Set<String>>(emptySet())
     }
 
-    // Track generated AI summaries per stock
+    // Maps stock symbol to generated AI summary text
     var aiSummaries by remember {
         mutableStateOf<Map<String, String>>(emptyMap())
     }
 
-    // Show loading or error overlay
+    //We are using remember to persist across UI rebuilds and
+    // mutableStateOf to keep values updated as they change
+    
     Box(modifier = modifier) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -131,6 +162,7 @@ fun TickerTockNavigation(
                     navController = navController,
                     startDestination = Screen.Watchlist.route
                 ) {
+
                     composable(Screen.Watchlist.route) {
                         WatchlistScreen(
                             watchlistStocks = watchlistStocks,
@@ -142,7 +174,8 @@ fun TickerTockNavigation(
                             },
                             onSearchClick = {
                                 if (watchlistStocks.size >= maxWatchlistSize) {
-                                    errorMessage = "Maximum $maxWatchlistSize stocks allowed in watchlist"
+                                    errorMessage =
+                                        "Maximum $maxWatchlistSize stocks allowed in watchlist"
                                 } else {
                                     navController.navigate(Screen.Search.route)
                                 }
@@ -162,9 +195,11 @@ fun TickerTockNavigation(
                                             }
                                             stockDataMap = newStockDataMap
                                         } else {
-                                            val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                                            val errorMsg =
+                                                result.exceptionOrNull()?.message ?: "Unknown error"
                                             if (errorMsg.contains("rate limit")) {
-                                                errorMessage = "API key limit reached. Please try again later."
+                                                errorMessage =
+                                                    "API key limit reached. Please try again later."
                                             } else {
                                                 errorMessage = "Failed to refresh: $errorMsg"
                                             }
@@ -197,141 +232,150 @@ fun TickerTockNavigation(
                         )
                     }
 
-                composable(Screen.News.route) {
-                    NewsScreen(
-                        stockSymbol = selectedStock,
-                        watchlistStocks = watchlistStocks,
-                        newsDataMap = newsDataMap,
-                        articleIndexPerStock = articleIndexPerStock,
-                        endMessageShownForStocks = endMessageShownForStocks,
-                        onAISummaryClick = {
-                            // Navigate to detailed AI summary for the current stock
-                            navController.navigate("detailed_ai_summary/$selectedStock")
-                        },
-                        onStockChange = { newStock ->
-                            selectedStock = newStock
-                        },
-                        onArticleSwiped = { stockSymbol, articleId ->
-                            val currentArticles = swipedArticles[stockSymbol] ?: emptySet()
-                            swipedArticles = swipedArticles + (stockSymbol to (currentArticles + articleId))
-                        },
-                        onArticleIndexChanged = { stockSymbol, newIndex ->
-                            articleIndexPerStock = articleIndexPerStock + (stockSymbol to newIndex)
-                        },
-                        onEndMessageShown = { stockSymbol ->
-                            endMessageShownForStocks = endMessageShownForStocks + stockSymbol
-                        }
-                    )
-                }
+                    composable(Screen.News.route) {
+                        NewsScreen(
+                            stockSymbol = selectedStock,
+                            watchlistStocks = watchlistStocks,
+                            newsDataMap = newsDataMap,
+                            articleIndexPerStock = articleIndexPerStock,
+                            endMessageShownForStocks = endMessageShownForStocks,
+                            onAISummaryClick = {
+                                // Navigate to detailed AI summary for the current stock
+                                navController.navigate("detailed_ai_summary/$selectedStock")
+                            },
+                            onStockChange = { newStock ->
+                                selectedStock = newStock
+                            },
+                            onArticleSwiped = { stockSymbol, articleId ->
+                                val currentArticles = swipedArticles[stockSymbol] ?: emptySet()
+                                swipedArticles =
+                                    swipedArticles + (stockSymbol to (currentArticles + articleId))
+                            },
+                            onArticleIndexChanged = { stockSymbol, newIndex ->
+                                articleIndexPerStock =
+                                    articleIndexPerStock + (stockSymbol to newIndex)
+                            },
+                            onEndMessageShown = { stockSymbol ->
+                                endMessageShownForStocks = endMessageShownForStocks + stockSymbol
+                            }
+                        )
+                    }
 
-                composable(Screen.AISummary.route) {
-                    AISummaryScreen(
-                        swipedArticles = swipedArticles,
-                        newsDataMap = newsDataMap,
-                        onStockClick = { stockSymbol ->
-                            navController.navigate("detailed_ai_summary/$stockSymbol")
-                        }
-                    )
-                }
+                    composable(Screen.AISummary.route) {
+                        AISummaryScreen(
+                            swipedArticles = swipedArticles,
+                            newsDataMap = newsDataMap,
+                            onStockClick = { stockSymbol ->
+                                navController.navigate("detailed_ai_summary/$stockSymbol")
+                            }
+                        )
+                    }
 
-                composable(Screen.DetailedAISummary.route) { backStackEntry ->
-                    val stockSymbol = backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
-                    DetailedAISummaryScreen(
-                        stockSymbol = stockSymbol,
-                        swipedArticles = swipedArticles,
-                        newsDataMap = newsDataMap,
-                        stockDataMap = stockDataMap,
-                        aiSummaries = aiSummaries,
-                        endMessageShownForStocks = endMessageShownForStocks,
-                        onBackClick = {
-                            navController.popBackStack()
-                        },
-                        onGenerateSummary = { stockSymbol, summary ->
-                            aiSummaries = aiSummaries + (stockSymbol to summary)
-                            navController.navigate("ai_summary_display/$stockSymbol")
-                        },
-                        onViewSummary = { stockSymbol ->
-                            navController.navigate("ai_summary_display/$stockSymbol")
-                        }
-                    )
-                }
+                    composable(Screen.DetailedAISummary.route) { backStackEntry ->
+                        val stockSymbol =
+                            backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
+                        DetailedAISummaryScreen(
+                            stockSymbol = stockSymbol,
+                            swipedArticles = swipedArticles,
+                            newsDataMap = newsDataMap,
+                            stockDataMap = stockDataMap,
+                            aiSummaries = aiSummaries,
+                            endMessageShownForStocks = endMessageShownForStocks,
+                            onBackClick = {
+                                navController.popBackStack()
+                            },
+                            onGenerateSummary = { stockSymbol, summary ->
+                                aiSummaries = aiSummaries + (stockSymbol to summary)
+                                navController.navigate("ai_summary_display/$stockSymbol")
+                            },
+                            onViewSummary = { stockSymbol ->
+                                navController.navigate("ai_summary_display/$stockSymbol")
+                            }
+                        )
+                    }
 
-                composable(Screen.AISummaryDisplay.route) { backStackEntry ->
-                    val stockSymbol = backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
-                    val summary = aiSummaries[stockSymbol] ?: ""
-                    AISummaryDisplayScreen(
-                        stockSymbol = stockSymbol,
-                        summary = summary,
-                        onBackClick = {
-                            navController.popBackStack()
-                        }
-                    )
-                }
+                    composable(Screen.AISummaryDisplay.route) { backStackEntry ->
+                        val stockSymbol =
+                            backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
+                        val summary = aiSummaries[stockSymbol] ?: ""
+                        AISummaryDisplayScreen(
+                            stockSymbol = stockSymbol,
+                            summary = summary,
+                            onBackClick = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
 
-                composable(Screen.Search.route) {
-                    SearchScreen(
-                        watchlistStocks = watchlistStocks,
-                        onStockAdd = { stockSymbol ->
-                            if (stockSymbol !in watchlistStocks && watchlistStocks.size < maxWatchlistSize) {
-                                isLoadingStock = true
-                                errorMessage = null
-                                coroutineScope.launch {
-                                    val result = repository.fetchStockAndNews(stockSymbol)
-                                    isLoadingStock = false
-                                    if (result.isSuccess) {
-                                        val (stock, news) = result.getOrThrow()
-                                        // Add to watchlist
-                                        watchlistStocks = watchlistStocks + stockSymbol
-                                        // Store data
-                                        stockDataMap = stockDataMap + (stockSymbol to stock)
-                                        newsDataMap = newsDataMap + (stockSymbol to news)
-                                        // Set as selected stock if it's the first one
-                                        if (selectedStock.isEmpty()) {
-                                            selectedStock = stockSymbol
-                                        }
-                                        navController.popBackStack()
-                                    } else {
-                                        val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
-                                        if (errorMsg.contains("rate limit")) {
-                                            errorMessage = "API key limit reached. Please try again later."
-                                        } else if (errorMsg.contains("No news available")) {
-                                            errorMessage = "No news available for $stockSymbol"
+                    composable(Screen.Search.route) {
+                        SearchScreen(
+                            watchlistStocks = watchlistStocks,
+                            onStockAdd = { stockSymbol ->
+                                if (stockSymbol !in watchlistStocks && watchlistStocks.size < maxWatchlistSize) {
+                                    isLoadingStock = true
+                                    errorMessage = null
+                                    coroutineScope.launch {
+                                        val result = repository.fetchStockAndNews(stockSymbol)
+                                        isLoadingStock = false
+                                        if (result.isSuccess) {
+                                            val (stock, news) = result.getOrThrow()
+                                            // Add to watchlist
+                                            watchlistStocks = watchlistStocks + stockSymbol
+                                            // Store data
+                                            stockDataMap = stockDataMap + (stockSymbol to stock)
+                                            newsDataMap = newsDataMap + (stockSymbol to news)
+                                            // Set as selected stock if it's the first one
+                                            if (selectedStock.isEmpty()) {
+                                                selectedStock = stockSymbol
+                                            }
+                                            navController.popBackStack()
                                         } else {
-                                            errorMessage = "Failed to add stock: $errorMsg"
+                                            val errorMsg =
+                                                result.exceptionOrNull()?.message ?: "Unknown error"
+                                            if (errorMsg.contains("rate limit")) {
+                                                errorMessage =
+                                                    "API key limit reached. Please try again later."
+                                            } else if (errorMsg.contains("No news available")) {
+                                                errorMessage = "No news available for $stockSymbol"
+                                            } else {
+                                                errorMessage = "Failed to add stock: $errorMsg"
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    )
-                }
-            }
-        }
-
-        // Loading indicator
-        if (isLoadingStock || isRefreshing) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        }
-
-        // Error dialog
-        errorMessage?.let { message ->
-            AlertDialog(
-                onDismissRequest = { errorMessage = null },
-                title = { Text("Error") },
-                text = { Text(message) },
-                confirmButton = {
-                    TextButton(onClick = { errorMessage = null }) {
-                        Text("OK")
+                        )
                     }
                 }
-            )
+            }
+
+
+            // Loading indicator
+            if (isLoadingStock || isRefreshing) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            // Error dialog
+            errorMessage?.let { message ->
+                AlertDialog(
+                    onDismissRequest = { errorMessage = null },
+                    title = { Text("Error") },
+                    text = { Text(message) },
+                    confirmButton = {
+                        TextButton(onClick = { errorMessage = null }) {
+                            Text("OK")
+                        }
+                    }
+                )
+            }
+
+
         }
-    }
     }
 
 }
