@@ -143,7 +143,7 @@ fun DetailedAISummaryScreen(
     val coroutineScope = rememberCoroutineScope()
     var isGeneratingSummary by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    // Get the articles that were swiped for this stock
+    // Store the articles on this stock that were swiped on the news screen, which is passed from Single-Source-Of-Truth nav page.
     val swipedArticleIds = remember(stockSymbol, swipedArticles) {
         swipedArticles[stockSymbol] ?: emptySet()
     }
@@ -156,18 +156,17 @@ fun DetailedAISummaryScreen(
         }
     }
 
-    // Check if all articles have been viewed
+    // Ensure that all articles for given stock are stored
     val allArticles = newsDataMap[stockSymbol] ?: emptyList()
     val hasViewedAllArticles = stockSymbol in endMessageShownForStocks
     val hasSummary = stockSymbol in aiSummaries
 
-    // Get stock data
+    //Get stock data
     val stock = stockDataMap[stockSymbol]
 
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Header row with back button and AI button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -197,7 +196,6 @@ fun DetailedAISummaryScreen(
             Button(
                 onClick = {
                     if (hasSummary) {
-                        // Navigate to existing summary
                         onViewSummary(stockSymbol)
                     } else if (hasViewedAllArticles && stock != null) {
                         // Generate new summary
@@ -440,7 +438,7 @@ data class SummarySections(
 )
 
 fun parseSummaryIntoSections(summary: String): SummarySections {
-    // Split the summary by the section headers
+    // This regex was hard to set up, I used https://regex101.com/ for debugging, lots of edge case, workflow was basically to get a few prompts, put them into the regex website until I was able to identify all of the different parts
     val executiveSummaryMatch = "\\*\\*Executive Summary\\*\\*\\s*\\n(.+?)(?=\\n\\*\\*Key Points\\*\\*|$)".toRegex(RegexOption.DOT_MATCHES_ALL)
     val keyPointsMatch = "\\*\\*Key Points\\*\\*\\s*\\n(.+?)(?=\\n\\*\\*Sentiment Analysis\\*\\*|$)".toRegex(RegexOption.DOT_MATCHES_ALL)
     val sentimentMatch = "\\*\\*Sentiment Analysis\\*\\*\\s*\\n(.+)".toRegex(RegexOption.DOT_MATCHES_ALL)
