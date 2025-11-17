@@ -239,10 +239,6 @@ fun TickerTockNavigation(
                             newsDataMap = newsDataMap,
                             articleIndexPerStock = articleIndexPerStock,
                             endMessageShownForStocks = endMessageShownForStocks,
-                            onAISummaryClick = {
-                                // Navigate to detailed AI summary for the current stock
-                                navController.navigate("detailed_ai_summary/$selectedStock")
-                            },
                             onStockChange = { newStock ->
                                 selectedStock = newStock
                             },
