@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 object GroqService {
     private const val BASE_URL = "https://api.groq.com/openai/v1/"
-    private const val API_KEY = "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" // Free grok API KEY so we don't have it in a private file, but the API is actually able to detect that we pushed to a public repo, so we need to move it into a private file
+    private const val API_KEY = "" // Look at google dock for Key
     private const val MODEL = "llama-3.1-8b-instant" // Cheapest and fastest model
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {

@@ -145,7 +145,8 @@ fun TickerTockNavigation(
 
     //We are using remember to persist across UI rebuilds and
     // mutableStateOf to keep values updated as they change
-    
+
+    //Nested onto padding for looks
     Box(modifier = modifier) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -158,20 +159,27 @@ fun TickerTockNavigation(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
+                //Main part, defining nav host for app navigation
                 NavHost(
                     navController = navController,
                     startDestination = Screen.Watchlist.route
                 ) {
-
                     composable(Screen.Watchlist.route) {
                         WatchlistScreen(
+                            //What it needs
+
+                            //Stocks to show
                             watchlistStocks = watchlistStocks,
+                            //Map to show price
                             stockDataMap = stockDataMap,
+                            //For loading indicator
                             isRefreshing = isRefreshing,
+                            //List of stocks are clickable
                             onStockClick = { stock ->
                                 selectedStock = stock
                                 navController.navigate(Screen.News.route)
                             },
+                            //Go to serach screen
                             onSearchClick = {
                                 if (watchlistStocks.size >= maxWatchlistSize) {
                                     errorMessage =
@@ -180,6 +188,7 @@ fun TickerTockNavigation(
                                     navController.navigate(Screen.Search.route)
                                 }
                             },
+                            //Call repository (Calls api) to get new prices
                             onRefresh = {
                                 if (watchlistStocks.isNotEmpty()) {
                                     isRefreshing = true
@@ -207,6 +216,7 @@ fun TickerTockNavigation(
                                     }
                                 }
                             },
+                            //Garbage button
                             onStockRemove = { stockSymbol ->
                                 // Remove from watchlist
                                 watchlistStocks = watchlistStocks.filter { it != stockSymbol }
@@ -234,23 +244,32 @@ fun TickerTockNavigation(
 
                     composable(Screen.News.route) {
                         NewsScreen(
+                            //Stock currently looking at
                             stockSymbol = selectedStock,
+                            //Stocks to show
                             watchlistStocks = watchlistStocks,
+                            //Map stocks to news
                             newsDataMap = newsDataMap,
+                            //Map Stock to which articles its on
                             articleIndexPerStock = articleIndexPerStock,
+                            //Map of stocks that are fully swiped
                             endMessageShownForStocks = endMessageShownForStocks,
+                            //Swiped Up/Down
                             onStockChange = { newStock ->
                                 selectedStock = newStock
                             },
+                            //Swiped left/right
                             onArticleSwiped = { stockSymbol, articleId ->
                                 val currentArticles = swipedArticles[stockSymbol] ?: emptySet()
                                 swipedArticles =
                                     swipedArticles + (stockSymbol to (currentArticles + articleId))
                             },
+                            //When onArticleSwiped update articleIndexPerStock
                             onArticleIndexChanged = { stockSymbol, newIndex ->
                                 articleIndexPerStock =
                                     articleIndexPerStock + (stockSymbol to newIndex)
                             },
+                            //If swiped through all articles update endMessageShownForStocks
                             onEndMessageShown = { stockSymbol ->
                                 endMessageShownForStocks = endMessageShownForStocks + stockSymbol
                             }
@@ -259,8 +278,11 @@ fun TickerTockNavigation(
 
                     composable(Screen.AISummary.route) {
                         AISummaryScreen(
+                            //Show relevant articles
                             swipedArticles = swipedArticles,
+                            //Map stocks to News
                             newsDataMap = newsDataMap,
+                            //if you click on the stock navigate to its article page
                             onStockClick = { stockSymbol ->
                                 navController.navigate("detailed_ai_summary/$stockSymbol")
                             }
@@ -268,22 +290,32 @@ fun TickerTockNavigation(
                     }
 
                     composable(Screen.DetailedAISummary.route) { backStackEntry ->
+                        //link to relevant stock
                         val stockSymbol =
-                            backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
+                            backStackEntry.arguments?.getString("stockSymbol") ?: ""
                         DetailedAISummaryScreen(
+                            //Stock you clicked
                             stockSymbol = stockSymbol,
+                            //Articles user cares about
                             swipedArticles = swipedArticles,
+                            //Map the relevant stock to articles
                             newsDataMap = newsDataMap,
+                            //Map the relevant stock to price (for AI)
                             stockDataMap = stockDataMap,
+                            //Maps stock symbol to generated AI summary text
                             aiSummaries = aiSummaries,
+                            //Needs to know if user swiped on all news for this stock
                             endMessageShownForStocks = endMessageShownForStocks,
+                            //Bac Button
                             onBackClick = {
                                 navController.popBackStack()
                             },
+                            //Generate new summary and navigate to it, add to aiSummaries for that stock
                             onGenerateSummary = { stockSymbol, summary ->
                                 aiSummaries = aiSummaries + (stockSymbol to summary)
                                 navController.navigate("ai_summary_display/$stockSymbol")
                             },
+                            //Navigate to ai summary if it already exists
                             onViewSummary = { stockSymbol ->
                                 navController.navigate("ai_summary_display/$stockSymbol")
                             }
@@ -291,12 +323,15 @@ fun TickerTockNavigation(
                     }
 
                     composable(Screen.AISummaryDisplay.route) { backStackEntry ->
+                        //Stock to show for AI summary
                         val stockSymbol =
-                            backStackEntry.arguments?.getString("stockSymbol") ?: "NVDA"
+                            backStackEntry.arguments?.getString("stockSymbol") ?: ""
+                        //Ai summary to show given stock
                         val summary = aiSummaries[stockSymbol] ?: ""
                         AISummaryDisplayScreen(
                             stockSymbol = stockSymbol,
                             summary = summary,
+                            //Back button
                             onBackClick = {
                                 navController.popBackStack()
                             }
@@ -305,7 +340,9 @@ fun TickerTockNavigation(
 
                     composable(Screen.Search.route) {
                         SearchScreen(
+                            //Needs stocks already in watchlist to know what not to show
                             watchlistStocks = watchlistStocks,
+                            //Make repository call to get price and news
                             onStockAdd = { stockSymbol ->
                                 if (stockSymbol !in watchlistStocks && watchlistStocks.size < maxWatchlistSize) {
                                     isLoadingStock = true
@@ -356,7 +393,7 @@ fun TickerTockNavigation(
                 }
             }
 
-            // Error dialog
+            // Error dialog if it exists
             errorMessage?.let { message ->
                 AlertDialog(
                     onDismissRequest = { errorMessage = null },
