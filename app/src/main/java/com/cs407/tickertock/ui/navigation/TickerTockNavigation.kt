@@ -280,8 +280,6 @@ fun TickerTockNavigation(
                         AISummaryScreen(
                             //Show relevant articles
                             swipedArticles = swipedArticles,
-                            //Map stocks to News
-                            newsDataMap = newsDataMap,
                             //if you click on the stock navigate to its article page
                             onStockClick = { stockSymbol ->
                                 navController.navigate("detailed_ai_summary/$stockSymbol")

@@ -27,7 +27,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun AISummaryScreen(
     swipedArticles: Map<String, Set<String>>,
-    newsDataMap: Map<String, List<com.cs407.tickertock.data.NewsArticle>>,
     onStockClick: (String) -> Unit = {}
 ) {
     // Get stocks that have swiped articles and count them
