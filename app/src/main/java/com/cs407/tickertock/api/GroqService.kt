@@ -31,7 +31,7 @@ object GroqService {
         .build()
 
     private val api = retrofit.create(GroqApi::class.java)
-
+    // Prompt includes all of the articles, their titles, and contains instructions to format the output so we can parse it later to build the ai summary display screen, also injects data about stock itself like price, change etc.
     suspend fun generateStockSummary(
         stock: Stock,
         articles: List<NewsArticle>
