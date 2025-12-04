@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cs407.tickertock.data.NewsArticle
 import com.cs407.tickertock.data.Stock
+import com.cs407.tickertock.utils.TiltDetector
 import kotlin.math.abs
 
 
@@ -89,6 +90,38 @@ fun NewsScreen(
         }
     }
 
+    // Helper function for handling swipe right (include article)
+    val handleSwipeRight = {
+        if (!showEndMessage && articles.isNotEmpty() && currentArticleIndex < articles.size) {
+            val currentArticle = articles[currentArticleIndex]
+            onArticleSwiped(stockSymbol, currentArticle.id)
+
+            if (currentArticleIndex == articles.size - 1) {
+                onEndMessageShown(stockSymbol)
+            } else {
+                onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+            }
+        }
+    }
+
+    // Helper function for handling swipe left (skip article)
+    val handleSwipeLeft = {
+        if (!showEndMessage && articles.isNotEmpty()) {
+            if (currentArticleIndex == articles.size - 1) {
+                onEndMessageShown(stockSymbol)
+            } else {
+                onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+            }
+        }
+    }
+
+    // Enable tilt detection only when there are articles to view
+    TiltDetector(
+        enabled = !showEndMessage && articles.isNotEmpty() && currentArticleIndex < articles.size,
+        onTiltRight = handleSwipeRight,
+        onTiltLeft = handleSwipeLeft
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -118,30 +151,11 @@ fun NewsScreen(
                                 }
                             }
                         } else if (abs(totalDragX) > abs(totalDragY) && abs(totalDragX) > 100) {
-                            // ---
                             // Implements horizontal drag (news article accept or remove)
-                            // ---
-                            if (!showEndMessage) {
-                                if (totalDragX > 0) {
-                                    if (articles.isNotEmpty() && currentArticleIndex < articles.size) {
-                                        val currentArticle = articles[currentArticleIndex]
-                                        onArticleSwiped(stockSymbol, currentArticle.id)
-
-                                        if (currentArticleIndex == articles.size - 1) {
-                                            onEndMessageShown(stockSymbol)
-                                        } else {
-                                            onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
-                                        }
-                                    }
-                                } else {
-                                    if (articles.isNotEmpty()) {
-                                        if (currentArticleIndex == articles.size - 1) {
-                                            onEndMessageShown(stockSymbol)
-                                        } else {
-                                            onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
-                                        }
-                                    }
-                                }
+                            if (totalDragX > 0) {
+                                handleSwipeRight()
+                            } else {
+                                handleSwipeLeft()
                             }
                         }
                         totalDragX = 0f
