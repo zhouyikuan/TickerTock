@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -18,7 +19,9 @@ import androidx.navigation.compose.composable
 import androidx.compose.ui.text.style.TextAlign
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.cs407.tickertock.api.ApiKeyManager
+import com.cs407.tickertock.data.AppState
 import com.cs407.tickertock.data.NewsArticle
+import com.cs407.tickertock.data.PersistenceManager
 import com.cs407.tickertock.data.Stock
 import com.cs407.tickertock.repository.StockRepository
 import com.cs407.tickertock.ui.screens.AISummaryDisplayScreen
@@ -27,6 +30,7 @@ import com.cs407.tickertock.ui.screens.DetailedAISummaryScreen
 import com.cs407.tickertock.ui.screens.NewsScreen
 import com.cs407.tickertock.ui.screens.SearchScreen
 import com.cs407.tickertock.ui.screens.WatchlistScreen
+import com.cs407.tickertock.widget.StockWidgetProvider
 import kotlinx.coroutines.launch
 
 
@@ -94,6 +98,11 @@ fun TickerTockNavigation(
     //Routine for api calls
     val coroutineScope = rememberCoroutineScope()
 
+    // Get context for persistence
+    // Pres
+    val context = LocalContext.current
+    val persistenceManager = remember { PersistenceManager.getInstance(context) }
+
     //Stock symbol currently being viewed in News scree
     var selectedStock by remember { mutableStateOf("") }
 
@@ -143,8 +152,72 @@ fun TickerTockNavigation(
         mutableStateOf<Map<String, String>>(emptyMap())
     }
 
+    // Stock symbol that is favorited for widget display (only one allowed)
+    var favoritedStock by remember {
+        mutableStateOf<String?>(null)
+    }
+
     //We are using remember to persist across UI rebuilds and
     // mutableStateOf to keep values updated as they change
+
+    // Pres
+    // Track whether we've loaded persisted state to avoid saving on initial composition
+    var hasLoadedPersistedState by remember { mutableStateOf(false) }
+
+    // Load persisted state on initial composition on coroutine
+    LaunchedEffect(Unit) {
+        val savedState = persistenceManager.loadAppState()
+        if (savedState != null) {
+            watchlistStocks = savedState.watchlistStocks
+            stockDataMap = savedState.stockDataMap
+            newsDataMap = savedState.newsDataMap
+            swipedArticles = savedState.swipedArticles
+            articleIndexPerStock = savedState.articleIndexPerStock
+            endMessageShownForStocks = savedState.endMessageShownForStocks
+            aiSummaries = savedState.aiSummaries
+            favoritedStock = savedState.favoritedStock
+
+            // Set selected stock to first in watchlist if available
+            if (savedState.watchlistStocks.isNotEmpty()) {
+                selectedStock = savedState.watchlistStocks.first()
+            }
+        }
+        hasLoadedPersistedState = true
+    }
+
+    // Save state whenever any persisted state variable changes
+    LaunchedEffect(
+        watchlistStocks,
+        stockDataMap,
+        newsDataMap,
+        swipedArticles,
+        articleIndexPerStock,
+        endMessageShownForStocks,
+        aiSummaries,
+        favoritedStock
+    ) {
+        // Only save after we've loaded the initial state
+        if (hasLoadedPersistedState) {
+            val currentState = AppState(
+                watchlistStocks = watchlistStocks,
+                stockDataMap = stockDataMap,
+                newsDataMap = newsDataMap,
+                swipedArticles = swipedArticles,
+                articleIndexPerStock = articleIndexPerStock,
+                endMessageShownForStocks = endMessageShownForStocks,
+                aiSummaries = aiSummaries,
+                favoritedStock = favoritedStock
+            )
+            persistenceManager.saveAppState(currentState)
+        }
+    }
+
+    // Update widget when favorited stock or stock data changes
+    LaunchedEffect(favoritedStock, stockDataMap) {
+        if (hasLoadedPersistedState) {
+            StockWidgetProvider.triggerWidgetUpdate(context)
+        }
+    }
 
     //Nested onto padding for looks
     Box(modifier = modifier) {
@@ -230,6 +303,11 @@ fun TickerTockNavigation(
                                 newsDataMap = newsDataMap - stockSymbol
                                 repository.clearCache(stockSymbol)
 
+                                // Clear favorite if this stock was favorited
+                                if (favoritedStock == stockSymbol) {
+                                    favoritedStock = null
+                                }
+
                                 // Update selected stock
                                 if (selectedStock == stockSymbol) {
                                     selectedStock = if (watchlistStocks.isNotEmpty()) {
@@ -237,6 +315,18 @@ fun TickerTockNavigation(
                                     } else {
                                         "" // Empty string when no stocks left
                                     }
+                                }
+                            },
+                            //Current favorited stock
+                            favoritedStock = favoritedStock,
+                            //Toggle favorite for a stock
+                            onFavoriteToggle = { stockSymbol ->
+                                if (favoritedStock == stockSymbol) {
+                                    // Unfavorite the current stock
+                                    favoritedStock = null
+                                } else {
+                                    // Favorite this stock (automatically unfavorites previous one)
+                                    favoritedStock = stockSymbol
                                 }
                             }
                         )
