@@ -46,7 +46,7 @@ fun AISummaryScreen(
         item {
             // Header
             Text(
-                text = "AI Summaries",
+                text = "Your Stocks",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth(),
