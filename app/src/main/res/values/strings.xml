@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">TickerTock</string>
+    <string name="widget_description">Shows your favorited stock price and change</string>
 </resources>

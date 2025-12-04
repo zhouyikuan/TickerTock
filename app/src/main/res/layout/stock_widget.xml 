@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_background"
+    android:gravity="center">
+
+    <!-- Stock Symbol -->
+    <TextView
+        android:id="@+id/widget_stock_symbol"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="AAPL"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF" />
+
+    <!-- Current Price -->
+    <TextView
+        android:id="@+id/widget_stock_price"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="$150.00"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_marginTop="8dp" />
+
+    <!-- Price Change -->
+    <TextView
+        android:id="@+id/widget_stock_change"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="+$2.50"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginTop="4dp" />
+
+    <!-- Percentage Change -->
+    <TextView
+        android:id="@+id/widget_stock_percentage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="(+1.69%)"
+        android:textSize="14sp"
+        android:layout_marginTop="2dp" />
+
+    <!-- Message when no stock is favorited -->
+    <TextView
+        android:id="@+id/widget_no_favorite_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Favorite a Stock in the TickerTock Watchlist"
+        android:textSize="14sp"
+        android:textColor="#FFFFFF"
+        android:textAlignment="center"
+        android:visibility="gone"
+        android:padding="8dp" />
+
+</LinearLayout>

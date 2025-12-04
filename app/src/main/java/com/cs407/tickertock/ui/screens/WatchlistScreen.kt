@@ -11,8 +11,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,7 +35,9 @@ fun WatchlistScreen(
     onStockClick: (String) -> Unit,
     onSearchClick: () -> Unit,
     onRefresh: () -> Unit,
-    onStockRemove: (String) -> Unit
+    onStockRemove: (String) -> Unit,
+    favoritedStock: String?,
+    onFavoriteToggle: (String) -> Unit
 ) {
     // Filter to only show stocks in the watchlist with their data
     val displayStocks = remember(watchlistStocks, stockDataMap) {
@@ -87,7 +91,9 @@ fun WatchlistScreen(
                 StockCard(
                     stock = stock,
                     onClick = { onStockClick(stock.symbol) },
-                    onRemove = { onStockRemove(stock.symbol) }
+                    onRemove = { onStockRemove(stock.symbol) },
+                    isFavorited = stock.symbol == favoritedStock,
+                    onFavoriteToggle = { onFavoriteToggle(stock.symbol) }
                 )
             }
         }
@@ -98,7 +104,9 @@ fun WatchlistScreen(
 fun StockCard(
     stock: Stock,
     onClick: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    isFavorited: Boolean,
+    onFavoriteToggle: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -157,15 +165,6 @@ fun StockCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (stock.isPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
-                            contentDescription = null,
-                            tint = if (stock.isPositive) Color(0xFF4CAF50) else Color(0xFFF44336),
-                            modifier = Modifier.size(16.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(4.dp))
-
                         Text(
                             text = "${if (stock.isPositive) "+" else ""}${String.format("%.2f", stock.priceChange)} (${if (stock.isPositive) "+" else ""}${String.format("%.2f", stock.percentageChange)}%)",
                             style = MaterialTheme.typography.bodySmall,
@@ -174,6 +173,15 @@ fun StockCard(
                         )
                     }
                 }
+            }
+
+            // Favorite star icon on the right
+            IconButton(onClick = onFavoriteToggle) {
+                Icon(
+                    imageVector = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = if (isFavorited) "Unfavorite stock" else "Favorite stock",
+                    tint = if (isFavorited) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
