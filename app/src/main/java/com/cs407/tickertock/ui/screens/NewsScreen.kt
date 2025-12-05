@@ -91,26 +91,30 @@ fun NewsScreen(
     }
 
     // Helper function for handling swipe right (include article)
-    val handleSwipeRight = {
-        if (!showEndMessage && articles.isNotEmpty() && currentArticleIndex < articles.size) {
-            val currentArticle = articles[currentArticleIndex]
-            onArticleSwiped(stockSymbol, currentArticle.id)
+    val handleSwipeRight = remember(showEndMessage, articles, currentArticleIndex, stockSymbol) {
+        {
+            if (!showEndMessage && articles.isNotEmpty() && currentArticleIndex < articles.size) {
+                val currentArticle = articles[currentArticleIndex]
+                onArticleSwiped(stockSymbol, currentArticle.id)
 
-            if (currentArticleIndex == articles.size - 1) {
-                onEndMessageShown(stockSymbol)
-            } else {
-                onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+                if (currentArticleIndex == articles.size - 1) {
+                    onEndMessageShown(stockSymbol)
+                } else {
+                    onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+                }
             }
         }
     }
 
     // Helper function for handling swipe left (skip article)
-    val handleSwipeLeft = {
-        if (!showEndMessage && articles.isNotEmpty()) {
-            if (currentArticleIndex == articles.size - 1) {
-                onEndMessageShown(stockSymbol)
-            } else {
-                onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+    val handleSwipeLeft = remember(showEndMessage, articles, currentArticleIndex, stockSymbol) {
+        {
+            if (!showEndMessage && articles.isNotEmpty()) {
+                if (currentArticleIndex == articles.size - 1) {
+                    onEndMessageShown(stockSymbol)
+                } else {
+                    onArticleIndexChanged(stockSymbol, currentArticleIndex + 1)
+                }
             }
         }
     }

@@ -21,7 +21,7 @@ fun TiltDetector(
 ) {
     val context = LocalContext.current
 
-    DisposableEffect(enabled) {
+    DisposableEffect(enabled, onTiltRight, onTiltLeft) {
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
